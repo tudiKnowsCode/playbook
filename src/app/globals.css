@@ -1,26 +1,184 @@
-@import "tailwindcss";
+/* Base styles from the Playbook design. Hover states live here because inline styles
+   can't express pseudo-classes, and the design leans on them throughout. */
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #0c0e11;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-archivo), Archivo, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: #eceef1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: #7ef2b0;
+  text-decoration: none;
+}
+
+a:hover {
+  color: #a6f7c8;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2f37;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* --- hover affordances ---------------------------------------------------- */
+
+/* Secondary buttons: header actions, filters, "load deal". */
+.pb-ghost-btn:hover {
+  border-color: rgba(126, 242, 176, 0.5) !important;
+  color: #7ef2b0 !important;
+}
+
+/* Primary mint button. */
+.pb-primary-btn:hover {
+  background: #a6f7c8 !important;
+}
+
+/* Sidebar navigation. */
+.pb-nav-btn:hover {
+  background: #191e24;
+}
+
+/* Action cards in "Do these first". */
+.pb-action-card:hover {
+  border-color: rgba(126, 242, 176, 0.45) !important;
+}
+
+/* Table rows. */
+.pb-row:hover {
+  background: #171b21;
+}
+
+/* Dashed "connect another league" button. */
+.pb-dashed-btn:hover {
+  border-color: rgba(126, 242, 176, 0.5) !important;
+  color: #7ef2b0 !important;
+}
+
+/* Wide tables scroll inside their own card rather than the page. Momentum scrolling
+   matters here: on a phone these are the only horizontally scrollable regions. */
+.pb-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* The tab strip that stands in for the sidebar on narrow screens. Hidden by default so
+   it costs nothing on desktop; the media query below turns it on. */
+.pb-mobile-nav {
+  display: none;
+}
+
+/* --- narrow screens -------------------------------------------------------- */
+
+/* The app is a dense desktop dashboard; below ~900px the two-column layouts collapse
+   to a single column, the sidebar gives way to the tab strip, and the chrome tightens
+   so the content keeps the width. */
+@media (max-width: 900px) {
+  .pb-split {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .pb-sidebar {
+    display: none !important;
+  }
+  .pb-mobile-nav {
+    display: flex !important;
+  }
+  .pb-header {
+    padding: 0 14px !important;
+    gap: 12px !important;
+  }
+  .pb-main {
+    padding: 16px 14px 48px !important;
+  }
+  /* Header controls are 26-30px tall by design; that is under the comfortable
+     touch target size, and they are the two controls used most on a phone. */
+  .pb-header button {
+    min-height: 40px;
+  }
+  /* Same for the in-page controls — position filters, Queue, Load deal — which are
+     30px on desktop where there is a cursor to aim with. */
+  .pb-main button {
+    min-height: 38px;
+  }
+}
+
+/* Phone widths. The wordmark and sync timestamp are the first things to go — the logo
+   and the league name carry the same information in a third of the space. */
+@media (max-width: 640px) {
+  .pb-wordmark,
+  .pb-synced {
+    display: none !important;
+  }
+  .pb-league-name {
+    display: inline-block;
+    max-width: 38vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Give the two player-name columns room by trimming the numeric ones. */
+  .pb-slot-row {
+    grid-template-columns: minmax(0, 1fr) 46px 34px 46px minmax(0, 1fr) !important;
+    padding-left: 11px !important;
+    padding-right: 11px !important;
+  }
+  /* 150 + 84 + 96 of fixed columns cannot fit a phone, so the row stacks. */
+  .pb-trade-idea {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 9px !important;
+  }
+  .pb-trade-idea .pb-trade-gain {
+    text-align: left !important;
+  }
+
+  /* The matchup hero is the widest thing in the app: two 44px scores either side of a
+     52px win probability will not fit side by side, and a grid column never shrinks
+     below its longest word. Stack the three and step the type down. */
+  .pb-hero {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px !important;
+    padding: 18px 16px !important;
+    --hero-score: 34px;
+    --hero-prob: 40px;
+  }
+  .pb-hero > * {
+    text-align: center !important;
+  }
+
+  .pb-page-title {
+    font-size: 22px !important;
+  }
+
+  /* Freeing ~60px in the header, which is otherwise a single unwrappable row. */
+  .pb-league-source {
+    display: none !important;
+  }
+  .pb-league-name {
+    max-width: 30vw;
+  }
 }

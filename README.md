@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Playbook
 
-## Getting Started
+A personal fantasy football command center for your ESPN and Sleeper leagues — matchup
+odds, a start/sit optimizer, waiver targets, a trade desk, power rankings and
+cross-league player exposure, all in one dashboard.
 
-First, run the development server:
+Projections and rankings come from **FantasyPros expert consensus (ECR)**, joined onto
+your real rosters from ESPN and Sleeper.
+
+## Setup
 
 ```bash
+npm install
+cp .env.local.example .env.local   # then fill it in
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Connecting leagues
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Everything is configured through `.env.local`:
 
-## Learn More
+```ini
+# Sleeper — public API, just your username
+SLEEPER_USERNAME=your_sleeper_name
 
-To learn more about Next.js, take a look at the following resources:
+# ESPN — league ids, comma separated. Optionally `id:Label`.
+ESPN_LEAGUES=123456789,987654321:Office League
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# ESPN private leagues need these two cookies
+ESPN_SWID={XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
+ESPN_S2=AEB...long...string
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Sleeper** needs nothing but your username — every league on that account is picked up
+automatically.
 
-## Deploy on Vercel
+**ESPN** needs the numeric league id from your league URL. Private leagues additionally
+need two cookies from a signed-in browser session: open fantasy.espn.com → DevTools →
+Application → Cookies → `https://fantasy.espn.com`, and copy `SWID` and `espn_s2`.
+Public ESPN leagues work with just the league id.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`.env.local` is gitignored. Restart the dev server after editing it.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Verifying it works
+
+```bash
+npm run selftest
+```
+
+This checks the lineup optimizer against an exhaustive brute-force search, calls every
+upstream feed for real, and measures the FantasyPros ↔ Sleeper name-join rate. With
+credentials configured it also loads your actual leagues and prints a summary.
+
+## The six views
+
+Keyboard shortcuts in brackets.
+
+| View | | What it does |
+| --- | --- | --- |
+| **Matchup** | `M` | Win probability from a 10,000-run Monte Carlo simulation, slot-by-slot comparison against your opponent, a ranked "do these first" action list, and your season outlook. |
+| **Exposure** | `E` | Every player you're *starting* across all connected leagues, the starters you're facing, and the players you both start *and* face. Bench players are excluded — they can't affect a result this week. |
+| **Lineup** | `L` | Optimal start/sit, solved exactly. Shows the points your current lineup leaves on the bench and previews the swaps. |
+| **Waivers** | `W` | Free agents scored against *your* roster's needs, with suggested FAAB bids and drop candidates. |
+| **Trades** | `T` | Two-sided trade evaluation plus a trade finder that only surfaces deals where both teams improve. |
+| **League** | `G` | Standings, power rankings, playoff odds and the rest of the week's games. |
+
+## How the numbers are produced
+
+**Projections** are FantasyPros ECR (`r2p_pts`), pulled per position for your league's
+scoring format (standard / half-PPR / full PPR). Floor and ceiling are an ~80% interval
+around the projection, widened when the experts disagree. Players off the FantasyPros
+boards fall back to the provider's own projection.
+
+**Lineup optimization** is an assignment problem, not a sort. A greedy fill ("best RB
+into RB1, next best into FLEX") is provably wrong once slots overlap, so this solves it
+exactly with the Hungarian algorithm — verified against brute force in the self test.
+
+**Win probability** simulates each starter independently from their own floor/ceiling
+spread, so a boom/bust roster is correctly treated as more volatile than a steady one.
+Seeded off the league and week, so refreshing doesn't jitter the number.
+
+**Playoff and title odds** simulate the remaining schedule 10,000 times, then run a
+single-elimination bracket over the qualifying seeds.
+
+**Power rankings** blend scoring rate, current roster strength and record — weighted
+away from record early in the season, when a 2-0 start means very little.
+
+**Waiver scores** are driven by how much a player would improve your *optimal* lineup,
+not their raw ranking: a great player at a position you're deep at scores low.
+
+**Trade values** are rest-of-season points above replacement across the games that
+remain, so they stay tied to your league's scoring and roster shape.
+
+## Notes
+
+- Playbook is **read-only**. It never writes lineups, claims or offers back to ESPN or
+  Sleeper — the "preview" and "queue" controls are local only. Make the actual move in
+  the provider's own app.
+- Upstream responses are cached in-process (see `src/lib/cache.ts`). The **Sync** button
+  clears the cache and refetches.
+- Sleeper's player dictionary is ~5MB and cached for 12 hours, per Sleeper's guidance.
+
+## Layout
+
+```
+src/lib/providers/   ESPN, Sleeper and FantasyPros clients
+src/lib/league.ts    normalizes both providers into one model
+src/lib/analysis/    optimizer, simulation, waivers, trades, exposure
+src/lib/insights.ts  assembles the dashboard payload
+src/components/      UI, one component per view
+scripts/selftest.ts  correctness and live-feed checks
+```

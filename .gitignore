@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local secrets
+.env.local
+.env.local.bak
+
+# ...but the template the README tells you to copy has to ship with the repo.
+!.env.local.example
