@@ -52,6 +52,8 @@ interface Enrichment {
   rosFallback: Map<string, fp.FpRosRanking>;
   byes: Map<string, number>;
   schedule: Awaited<ReturnType<typeof getWeekSchedule>>;
+  /** Why the week's schedule is missing, when it is. */
+  scheduleError: string | null;
   trending: Map<string, number>;
   week: number;
   regularSeasonWeeks: number;
@@ -76,7 +78,15 @@ function enrich(
     ctx.ros.get(key) ?? (fallbackKey ? ctx.rosFallback.get(fallbackKey) : undefined);
 
   const game = base.nflTeam ? ctx.schedule.get(base.nflTeam) : undefined;
-  const onBye = base.nflTeam != null && game == null;
+  // The schedule is the bye signal, but only when there is one. An empty map means the
+  // fetch failed, and reading that as "every team is idle" marks all 32 on bye, which
+  // zeroes every projection on every roster — a silent, total wipeout. Fall back to the
+  // bye week the FantasyPros board carries per player.
+  const onBye =
+    base.nflTeam != null &&
+    (ctx.schedule.size > 0
+      ? game == null
+      : weekly?.byeWeek != null && weekly.byeWeek === ctx.week);
 
   // A player on bye or ruled out scores nothing regardless of what a stale board says.
   const unavailable = onBye || base.status === "O" || base.status === "IR";
@@ -120,6 +130,14 @@ function round1(n: number): number {
  * used either way, but silently pinning last week's projections onto this week's
  * lineup is exactly the kind of wrong that looks right.
  */
+function scheduleWarning(ctx: Enrichment): string | null {
+  if (!ctx.scheduleError) return null;
+  return (
+    `NFL schedule unavailable (${ctx.scheduleError}). Kickoff times and live ` +
+    `scores are missing; byes come from the FantasyPros boards instead.`
+  );
+}
+
 function rankingsWeekWarning(weekly: fp.FpRankingSet, week: number): string | null {
   if (weekly.byKey.size === 0 || weekly.week === 0 || weekly.week === week) return null;
   return `FantasyPros is still publishing week ${weekly.week} rankings; week ${week} projections may be stale.`;
@@ -135,7 +153,13 @@ async function buildEnrichment(
     fp.getRankings(scoring),
     fp.getRestOfSeasonRankings(scoring).catch(() => new Map<string, fp.FpRosRanking>()),
     getByeWeeks(season).catch(() => new Map<string, number>()),
-    getWeekSchedule(season, week).catch(() => new Map()),
+    getWeekSchedule(season, week).then(
+      (map) => ({ map, error: null as string | null }),
+      (err: unknown) => ({
+        map: new Map() as Awaited<ReturnType<typeof getWeekSchedule>>,
+        error: (err instanceof Error ? err.message : "request failed").slice(0, 120),
+      })
+    ),
     sleeper.getTrendingAdds().catch(() => new Map<string, number>()),
   ]);
   // Second-chance index for the rest-of-season board, mirroring the weekly one.
@@ -145,7 +169,18 @@ async function buildEnrichment(
     if (key && !rosFallback.has(key)) rosFallback.set(key, entry);
   }
 
-  return { weekly, ros, rosFallback, byes, schedule, trending, week, regularSeasonWeeks };
+  return {
+    weekly,
+    ros,
+    rosFallback,
+    byes,
+    schedule: schedule.map,
+    scheduleError:
+      schedule.error ?? (schedule.map.size === 0 ? "no games returned for this week" : null),
+    trending,
+    week,
+    regularSeasonWeeks,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +235,8 @@ export async function loadSleeperLeague(
   }
   const sleeperStale = rankingsWeekWarning(ctx.weekly, week);
   if (sleeperStale) warnings.push(sleeperStale);
+  const sleeperSchedule = scheduleWarning(ctx);
+  if (sleeperSchedule) warnings.push(sleeperSchedule);
 
   const startingSlots: SlotId[] = [];
   let benchSlots = 0;
@@ -422,6 +459,8 @@ export async function loadEspnLeague(
   if (ctx.weekly.byKey.size === 0) warnings.push("FantasyPros rankings unavailable; using ESPN projections.");
   const espnStale = rankingsWeekWarning(ctx.weekly, week);
   if (espnStale) warnings.push(espnStale);
+  const espnSchedule = scheduleWarning(ctx);
+  if (espnSchedule) warnings.push(espnSchedule);
 
   const swid = credentials?.swid
     ? credentials.swid.startsWith("{")
